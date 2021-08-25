@@ -6,6 +6,7 @@ const session = require('express-session');
 const flash = require('express-flash');
 const passport = require('passport');
 
+
 const initializePassport = require('./passportConfig');
 const initialize = require('./passportConfig');
 const { read } = require('fs');
@@ -41,9 +42,14 @@ app.get('/users/login',checkAuthenticated, (req, res) => {
     res.render("login");
 });
 app.get('/users/dashboard', checkNotAuthenticated, (req, res) => {
+    // res.sendFile(__dirname + '/public/index.html');
     res.render("dashboard", {user: req.user.name});
+    
 });
-
+app.get('/chat', function(req, res){
+    res.sendFile(__dirname + '/public/index.html');
+  });
+  
 app.get('/users/logout', (req,res)=> {
     req.logOut();
     req.flash("success_msg", "You have logged out");
@@ -128,6 +134,60 @@ function checkNotAuthenticated(req, res, next){
     }
    res.redirect('/users/login'); 
 }
+
+const botName = 'TechChat Bot';
+
+// Run when user connects
+io.on('connection', socket => {
+    socket.on('joinRoom', ({ username, room }) => {
+      const user = userJoin(socket.id, username, room);
+  
+      socket.join(user.room);
+  
+      // Welcome current user
+      socket.emit('message', formatMessage(botName, 'Welcome to TechChat!'));
+  
+      // Broadcast when a user connects
+      socket.broadcast
+        .to(user.room)
+        .emit(
+          'message',
+          formatMessage(botName, `${user.username} has joined the chat`)
+        );
+  
+      // Send users and room info
+      io.to(user.room).emit('roomUsers', {
+        room: user.room,
+        users: getRoomUsers(user.room)
+      });
+    });
+  
+    // Listen for chatMessage
+    socket.on('chatMessage', msg => {
+      const user = getCurrentUser(socket.id);
+  
+      io.to(user.room).emit('message', formatMessage(user.username, msg));
+    });
+  
+    // Runs when user disconnects
+    socket.on('disconnect', () => {
+      const user = userLeave(socket.id);
+  
+      if (user) {
+        io.to(user.room).emit(
+          'message',
+          formatMessage(botName, `${user.username} has left the chat`)
+        );
+  
+        // Send users and room info
+        io.to(user.room).emit('roomUsers', {
+          room: user.room,
+          users: getRoomUsers(user.room)
+        });
+      }
+    });
+  });
+  
 
 app.listen(PORT, ()=> {
     console.log(`Server is running on port ${PORT}.`)
