@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <base href="/">
+    <!-- <base href="/"> -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css"
       integrity="sha256-mmgLkCYLUQbXn0B1SRqzHar6dCnv9oZFPEC1g1cwlkk="
       crossorigin="anonymous"
     />
-    <LINK rel="stylesheet" href="/public/Css/style.css" type="text/css" />
+    <LINK rel="stylesheet" href="/css/style.css" type="text/css" />
 
     <title>TechChat App</title>
   </head>
@@ -49,7 +49,150 @@
       crossorigin="anonymous"
     ></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.5/socket.io.js"></script>
-    <script src="Js/main.js"></script>
-    
+    <script src="js/main.js"></script>
+   <script>
+     const botName = 'TechChat Bot';
+
+// Run when user connects
+io.on('connection', socket => {
+  socket.on('joinRoom', ({ username, room }) => {
+    const user = userJoin(socket.id, username, room);
+
+    socket.join(user.room);
+
+    // Welcome current user
+    socket.emit('message', formatMessage(botName, 'Welcome to TechChat!'));
+
+    // Broadcast when a user connects
+    socket.broadcast
+      .to(user.room)
+      .emit(
+        'message',
+        formatMessage(botName, `${user.username} has joined the chat`)
+      );
+
+    // Send users and room info
+    io.to(user.room).emit('roomUsers', {
+      room: user.room,
+      users: getRoomUsers(user.room)
+    });
+  });
+
+  // Listen for chatMessage
+  socket.on('chatMessage', msg => {
+    const user = getCurrentUser(socket.id);
+
+    io.to(user.room).emit('message', formatMessage(user.username, msg));
+  });
+
+  // Runs when user disconnects
+  socket.on('disconnect', () => {
+    const user = userLeave(socket.id);
+
+    if (user) {
+      io.to(user.room).emit(
+        'message',
+        formatMessage(botName, `${user.username} has left the chat`)
+      );
+
+      // Send users and room info
+      io.to(user.room).emit('roomUsers', {
+        room: user.room,
+        users: getRoomUsers(user.room)
+      });
+    }
+  });
+});
+     const chatForm = document.getElementById('chat-form');
+const chatMessages = document.querySelector('.chat-messages');
+const roomName = document.getElementById('room-name');
+const userList = document.getElementById('users');
+
+// Get username and room from URL
+const { username, room } = Qs.parse(location.search, {
+  ignoreQueryPrefix: true,
+});
+
+const socket = io();
+
+// Join chatroom
+socket.emit('joinRoom', { username, room });
+
+// Get room and users
+socket.on('roomUsers', ({ room, users }) => {
+  outputRoomName(room);
+  outputUsers(users);
+});
+
+// Message from server
+socket.on('message', (message) => {
+  console.log(message);
+  outputMessage(message);
+
+  // Scroll down
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
+// Message submit
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+
+  // Get message text
+  let msg = e.target.elements.msg.value;
+
+  msg = msg.trim();
+
+  if (!msg) {
+    return false;
+  }
+
+  // Emit message to server
+  socket.emit('chatMessage', msg);
+
+  // Clear input
+  e.target.elements.msg.value = '';
+  e.target.elements.msg.focus();
+});
+
+// Output message to DOM
+function outputMessage(message) {
+  const div = document.createElement('div');
+  div.classList.add('message');
+  const p = document.createElement('p');
+  p.classList.add('meta');
+  p.innerText = message.username;
+  p.innerHTML += `<span>${message.time}</span>`;
+  div.appendChild(p);
+  const para = document.createElement('p');
+  para.classList.add('text');
+  para.innerText = message.text;
+  div.appendChild(para);
+  document.querySelector('.chat-messages').appendChild(div);
+}
+
+// Add room name to DOM
+function outputRoomName(room) {
+  roomName.innerText = room;
+}
+
+// Add users to DOM
+function outputUsers(users) {
+  userList.innerHTML = '';
+  users.forEach((user) => {
+    const li = document.createElement('li');
+    li.innerText = user.username;
+    userList.appendChild(li);
+  });
+}
+
+//Prompt the user before leave chat room
+document.getElementById('leave-btn').addEventListener('click', () => {
+  const leaveRoom = confirm('Are you sure you want to leave the chatroom?');
+  if (leaveRoom) {
+    window.location = '../index.html';
+  } else {
+  }
+});
+   </script> 
   </body>
 </html>
